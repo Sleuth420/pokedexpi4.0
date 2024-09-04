@@ -9,7 +9,7 @@ RESIZABLE_HEIGHT = True
 FULLSCREEN = False
 
 # --- Default Theme ---
-DEFAULT_THEME = "plastik"  # black or plastik
+DEFAULT_THEME = "breeze"  # black or plastik or equilux or breeze
 
 # --- Database ---
 DATABASE_FILE = os.path.join("data", "pokedex.db")

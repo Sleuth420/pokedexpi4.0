@@ -26,6 +26,7 @@ class PokedexApp:
         # Hide the current view if it exists
         if self.current_view:
             self.current_view.pack_forget()
+            self.current_view.unbind_keys()  # Unbind keys from the current view
 
         # Create the view instance if it doesn't exist
         if view_name not in self.views:
@@ -41,6 +42,7 @@ class PokedexApp:
                 logging.error(f"Error: View '{view_name}' not found.")
                 return
 
-        # Display the selected view
+        # Display the selected view and bind its keys
         self.current_view = self.views[view_name]
         self.current_view.pack(fill=tk.BOTH, expand=True)
+        self.current_view.bind_keys()  # Bind keys for the new view

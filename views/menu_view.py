@@ -11,27 +11,17 @@ class MenuView(tk.Frame):
         logging.debug("Initializing MenuView")
         self.master = master
         self.app = app
-        self.menu_buttons = []  # Initialize menu_buttons list HERE
+        self.menu_buttons = []
 
-        # Create a frame for the logo (and other elements)
-        logging.debug("Creating frame for logo in MenuView")
+        # Create a frame for the logo and menu buttons
         self.frame = ttk.Frame(self)
         self.frame.pack()
-        logging.debug("Packed frame in MenuView")
 
         self.create_logo()
         self.create_menu_buttons()
 
-        # Bind navigation keys
-        logging.debug("Binding navigation keys in MenuView")
-        self.master.bind("<Up>", self.handle_up)
-        self.master.bind("<Down>", self.handle_down)
-        self.master.bind("<Right>", self.handle_right)
-        self.master.bind("<Return>", self.handle_select)
-
-        # Set initial focus
-        logging.debug("Setting initial focus in MenuView")
-        # self.menu_buttons[0].focus()  # This line is commented out
+        # Set initial focus to the first button
+        self.menu_buttons[0].focus()
         self.selected_button_index = 0
 
     def create_logo(self):
@@ -53,11 +43,11 @@ class MenuView(tk.Frame):
 
         except FileNotFoundError:
             logging.error(f"Error: Image not found at '{logo_path}'")
-            # ... (error handling code - create a label or message) ...
+            # You can add error handling here, like displaying a message
 
         except Exception as e:
             logging.exception(f"An unexpected error occurred while creating the logo: {e}")
-            # ... (error handling code - create a label or message) ...
+            # You can add error handling here as well
 
     def create_menu_buttons(self):
         """Creates the buttons for the menu options."""
@@ -69,7 +59,6 @@ class MenuView(tk.Frame):
             {"text": "Settings", "command": self.show_settings}
         ]
 
-        # Create a button for each menu option
         for option in menu_options:
             button = ttk.Button(
                 self,
@@ -121,3 +110,21 @@ class MenuView(tk.Frame):
         """Handles the Enter/Return key press to invoke the selected button."""
         logging.debug("Handling select (Enter/Return) key in MenuView")
         self.menu_buttons[self.selected_button_index].invoke()
+
+    def bind_keys(self):
+        """Binds navigation keys to the MenuView."""
+        logging.debug("Binding navigation keys in MenuView")
+        self.master.bind("<Up>", self.handle_up)
+        self.master.bind("<Down>", self.handle_down)
+        self.master.bind("<Right>", self.handle_right)
+        self.master.bind("<Return>", self.handle_select)
+        print("Keys bound in MenuView")  # Debugging print statement
+
+    def unbind_keys(self):
+        """Unbinds navigation keys from the MenuView."""
+        logging.debug("Unbinding navigation keys in MenuView")
+        self.master.unbind("<Up>")
+        self.master.unbind("<Down>")
+        self.master.unbind("<Right>")
+        self.master.unbind("<Return>")
+        print("Keys unbound in MenuView")  # Debugging print statement

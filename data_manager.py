@@ -29,6 +29,8 @@ class PokemonDataManager:
         self.create_database_file()
         self.conn = self.create_connection(config.DATABASE_FILE)
         self.create_pokemon_table()
+        self.create_berries_table()
+        self.create_evolutions_table()
 
     def create_database_file(self):
         """Creates the database file if it doesn't exist."""
@@ -183,15 +185,32 @@ class PokemonDataManager:
             else:
                 print(f"Failed to fetch data. Status code: {response.status_code}")
                 break  # Stop fetching if there's an error
-    def get_all_pokemon(self):
-        """Fetches all Pokémon from the database."""
+    def get_all_pokemon(self, search_term=None, limit=None, offset=0):
+        """Fetches all Pokémon from the database, optionally filtered by search_term
+        and paginated using limit and offset."""
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT * FROM pokemon ORDER BY id")
+            if search_term:
+                query = "SELECT * FROM pokemon WHERE name LIKE ? ORDER BY id"
+                if limit:
+                    query += " LIMIT ? OFFSET ?"
+                    params = ('%' + search_term + '%', limit, offset)
+                else:
+                    params = ('%' + search_term + '%',)
+            else:
+                query = "SELECT * FROM pokemon ORDER BY id"
+                if limit:
+                    query += " LIMIT ? OFFSET ?"
+                    params = (limit, offset)
+                else:
+                    params = ()
+
+            cursor.execute(query, params)
             return cursor.fetchall()
+
         except sqlite3.Error as e:
             logging.error(f"Error fetching all Pokémon: {e}")
-            return []  # Return an empty list in case of error
+        return []
 
     def get_pokemon_by_id(self, pokemon_id):
         """Fetches a Pokémon by its ID from the database.
@@ -217,6 +236,7 @@ class PokemonDataManager:
             logging.error(f"Error fetching Pokémon by ID {pokemon_id}: {e}")
             return None
 
+
     def update_favorite_status(self, pokemon_id, is_favorite):
         """Updates the favorite status of a Pokémon."""
         try:
@@ -227,6 +247,7 @@ class PokemonDataManager:
         except sqlite3.Error as e:
             logging.error(f"Error updating favorite status for Pokémon {pokemon_id}: {e}")
 
+
     def close_connection(self):
         """Closes the database connection."""
         if self.conn:
@@ -234,7 +255,234 @@ class PokemonDataManager:
             logging.info("Database connection closed.")
 
 
+    def create_berries_table(self):
+        """Creates the berries table in the database if it doesn't exist."""
+        sql_create_berries_table = """
+                    CREATE TABLE IF NOT EXISTS berries (
+                        id INTEGER PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        growth_time INTEGER,
+                        max_harvest INTEGER,
+                        natural_gift_power INTEGER,
+                        size INTEGER,
+                        smoothness INTEGER,
+                        soil_dryness INTEGER,
+                        firmness TEXT,
+                        flavors TEXT 
+                    );
+                    """
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(sql_create_berries_table)
+            logging.info("Berries table created or already exists.")
+        except sqlite3.Error as e:
+            logging.error(f"Error creating berries table: {e}")
+
+
+    def fetch_berry_data(self, berry_url):
+        """Fetches berry data from the PokeAPI."""
+        try:
+            response = http.get(berry_url)
+            response.raise_for_status()
+
+            berry_data = response.json()
+
+            # Extract relevant berry data
+            id = berry_data['id']
+            name = berry_data['name']
+            growth_time = berry_data['growth_time']
+            max_harvest = berry_data['max_harvest']
+            natural_gift_power = berry_data['natural_gift_power']
+            size = berry_data['size']
+            smoothness = berry_data['smoothness']
+            soil_dryness = berry_data['soil_dryness']
+            firmness = berry_data['firmness']['name']
+            flavors = ', '.join([f["flavor"]["name"] for f in berry_data['flavors']])
+
+            return (id, name, growth_time, max_harvest, natural_gift_power, size, smoothness,
+                    soil_dryness, firmness, flavors)
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error fetching berry data from {berry_url}: {e}")
+            return None
+
+
+    def insert_berry(self, berry):
+        """Inserts a new berry into the berries table."""
+        sql = """
+                    INSERT INTO berries (id, name, growth_time, max_harvest, natural_gift_power, size, 
+                                         smoothness, soil_dryness, firmness, flavors)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """
+        try:
+            cur = self.conn.cursor()
+            cur.execute(sql, berry)
+            self.conn.commit()
+            logging.info(f"Inserted Berry with ID {cur.lastrowid}")
+            return cur.lastrowid
+        except sqlite3.Error as e:
+            logging.error(f"Error inserting berry: {e}")
+
+
+    def populate_berries_table(self, num_berries=None):
+        """Populates the database with berry data."""
+        if num_berries is None:
+            # Fetch the total number of berries from the API
+            response = http.get(f"{config.POKEAPI_BASE_URL}berry")
+            response.raise_for_status()
+            num_berries = response.json()['count']
+
+        for berry_id in range(1, num_berries + 1):
+            berry_url = f"{config.POKEAPI_BASE_URL}berry/{berry_id}"
+            berry_data = self.fetch_berry_data(berry_url)
+            if berry_data:
+                self.insert_berry(berry_data)
+                logging.info(f"Fetched and inserted berry: {berry_data[1]} (ID: {berry_data[0]})")
+            time.sleep(0.2)  # Add a small delay to avoid overwhelming the API
+
+
+    def create_evolutions_table(self):
+        """Creates the evolutions table in the database if it doesn't exist."""
+        sql_create_evolutions_table = """
+                    CREATE TABLE IF NOT EXISTS evolutions (
+                        id INTEGER PRIMARY KEY,
+                        pokemon_id INTEGER,
+                        evolves_to_id INTEGER,
+                        trigger TEXT, 
+                        level INTEGER,
+                        item TEXT,
+                        FOREIGN KEY(pokemon_id) REFERENCES pokemon(id),
+                        FOREIGN KEY(evolves_to_id) REFERENCES pokemon(id)
+                    );
+                    """
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(sql_create_evolutions_table)
+            logging.info("Evolutions table created or already exists.")
+        except sqlite3.Error as e:
+            logging.error(f"Error creating evolutions table: {e}")
+
+
+    def fetch_evolution_data(self, pokemon_id):
+        """Fetches evolution chain data for a given Pokemon from the PokeAPI."""
+        try:
+            # Get the Pokemon's species information
+            species_url = f"{config.POKEAPI_BASE_URL}pokemon-species/{pokemon_id}/"
+            species_response = http.get(species_url)
+            species_response.raise_for_status()
+            species_data = species_response.json()
+
+            # Get the evolution chain URL
+            evolution_chain_url = species_data['evolution_chain']['url']
+
+            # Fetch the evolution chain data
+            evolution_chain_response = http.get(evolution_chain_url)
+            evolution_chain_response.raise_for_status()
+            evolution_chain_data = evolution_chain_response.json()
+
+            # Parse the evolution chain data
+            evolutions = []
+            self._parse_evolution_chain(evolution_chain_data['chain'], evolutions)
+
+            return evolutions
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error fetching evolution data for Pokemon {pokemon_id}: {e}")
+            return []
+
+    def _parse_evolution_chain(self, chain_link, evolutions):
+        """Recursively parses an evolution chain link and extracts evolution data."""
+        pokemon_id = int(chain_link['species']['url'].split('/')[-2])
+
+        for evolution_detail in chain_link['evolves_to']:
+            evolves_to_id = int(evolution_detail['species']['url'].split('/')[-2])
+            trigger = evolution_detail['evolution_details'][0]['trigger']['name']
+            level = evolution_detail['evolution_details'][0].get('min_level')
+
+            # Check if evolution_details[0] exists before accessing 'item'
+            if evolution_detail['evolution_details'][0]:
+                item = evolution_detail['evolution_details'][0].get('item', {}).get('name')
+            else:
+                item = None  # Set item to None if it doesn't exist
+
+            evolutions.append((pokemon_id, evolves_to_id, trigger, level, item))
+
+            self._parse_evolution_chain(evolution_detail, evolutions)
+
+
+    def insert_evolution(self, evolution):
+        """Inserts a new evolution into the evolutions table."""
+        sql = """
+                    INSERT INTO evolutions (pokemon_id, evolves_to_id, trigger, level, item)
+                    VALUES (?, ?, ?, ?, ?)
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute(sql, evolution)
+            self.conn.commit()
+            logging.info(f"Inserted Evolution: {evolution[0]} -> {evolution[1]}")
+        except sqlite3.Error as e:
+            logging.error(f"Error inserting evolution: {e}")
+
+    def populate_evolutions_table(self):
+        """Populates the database with evolution data for all Pokemon."""
+        all_pokemon = self.get_all_pokemon()
+        for pokemon in all_pokemon:
+            pokemon_id = pokemon[0]
+            evolution_data = self.fetch_evolution_data(pokemon_id)
+            for evolution in evolution_data:
+                self.insert_evolution(evolution)
+            time.sleep(0.2)
+
+    # Add other methods as needed for fetching/filtering berries and evolutions
+    def get_all_berries(self, search_term=None):
+        """Fetches all berries from the database, optionally filtered by search_term."""
+        try:
+            cursor = self.conn.cursor()
+            if search_term:
+                cursor.execute("SELECT * FROM berries WHERE name LIKE ? ORDER BY id", ('%' + search_term + '%',))
+            else:
+                cursor.execute("SELECT * FROM berries ORDER BY id")
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Error fetching all berries: {e}")
+            return []
+
+    def get_berry_by_id(self, berry_id):
+        """Fetches a berry by its ID from the database."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM berries WHERE id = ?", (berry_id,))
+            return cursor.fetchone()
+        except sqlite3.Error as e:
+            logging.error(f"Error fetching berry by ID {berry_id}: {e}")
+            return None
+
+    def get_evolution_chain_for_pokemon(self, pokemon_id):
+        """Fetches the evolution chain for a given Pokemon from the database."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                WITH RECURSIVE evolution_chain(pokemon_id, evolves_to_id, trigger, level, item) AS (
+                    SELECT pokemon_id, evolves_to_id, trigger, level, item
+                    FROM evolutions
+                    WHERE pokemon_id = ?
+                    UNION ALL
+                    SELECT e.pokemon_id, e.evolves_to_id, e.trigger, e.level, e.item
+                    FROM evolutions e
+                    JOIN evolution_chain ec ON e.pokemon_id = ec.evolves_to_id
+                )
+                SELECT * FROM evolution_chain;
+            """, (pokemon_id,))
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Error fetching evolution chain for Pokemon {pokemon_id}: {e}")
+            return []
+
+
 if __name__ == '__main__':
     data_manager = PokemonDataManager()
     data_manager.populate_database()
+    data_manager.populate_berries_table()
+    data_manager.populate_evolutions_table()
     data_manager.close_connection()
