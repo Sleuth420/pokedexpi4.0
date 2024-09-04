@@ -11,13 +11,7 @@ class OnScreenKeyboard(tk.Frame):
         self.textvariable = textvariable
         self.exit_command = exit_command  # Command to execute when exiting the keyboard
 
-        self.key_rows = [
-            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='],
-            ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'],
-            ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", '\\'],
-            ['SHIFT', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'BACKSPACE'],
-            ['SPACE', 'ENTER']
-        ]
+        self.key_rows = []  # Initialize key_rows as an empty list to store button widgets
         self.current_row = 0
         self.current_col = 0
         self.shift_on = False
@@ -27,21 +21,32 @@ class OnScreenKeyboard(tk.Frame):
 
     def create_keyboard(self):
         """Creates the on-screen keyboard buttons."""
-        for row_index, row in enumerate(self.key_rows):
+        key_layout = [
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='],
+            ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'],
+            ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", '\\'],
+            ['SHIFT', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'BACKSPACE'],
+            ['SPACE', 'ENTER']
+        ]
+
+        for row_index, row in enumerate(key_layout):
+            button_row = []  # Create a list to store buttons for this row
             row_frame = tk.Frame(self)
             row_frame.pack(pady=2)
             for col_index, key in enumerate(row):
                 button = tk.Button(
                     row_frame,
                     text=key,
-                    width=4,
+                    width=2,
                     command=lambda k=key: self.press_key(k),
                     highlightthickness=2,  # For focus visualization
                     highlightbackground="black",  # Default unfocused color
                     highlightcolor="blue"  # Focused color
                 )
-                button.grid(row=row_index, column=col_index, padx=2)
+                button.grid(row=row_index, column=col_index, padx=1)
                 button.bind("<FocusIn>", lambda e, b=button: self.on_focus(b))
+                button_row.append(button)  # Add the button to the row list
+            self.key_rows.append(button_row)  # Add the row of buttons to key_rows
 
         # Initial focus on the first key
         self.key_rows[self.current_row][self.current_col].focus_set()
@@ -67,10 +72,9 @@ class OnScreenKeyboard(tk.Frame):
     def update_keyboard(self):
         """Updates the keyboard key text based on shift state."""
         for row_index, row in enumerate(self.key_rows):
-            for col_index, key in enumerate(row):
-                if key.isalpha():  # Only update alphabetic keys
-                    button = self.key_rows[row_index][col_index]
-                    button.config(text=key.upper() if self.shift_on else key.lower())
+            for col_index, button in enumerate(row):  # Iterate over buttons in the row
+                if button['text'].isalpha():  # Only update alphabetic keys
+                    button.config(text=button['text'].upper() if self.shift_on else button['text'].lower())
 
     def on_focus(self, button):
         """Handles focus events on keyboard buttons."""
@@ -78,7 +82,6 @@ class OnScreenKeyboard(tk.Frame):
             self.focused_button.config(highlightbackground="black")  # Reset previous focus
         self.focused_button = button
         self.focused_button.config(highlightbackground="blue")  # Highlight current focus
-
 
     def handle_up(self, event):
         """Handles the Up arrow key press."""
